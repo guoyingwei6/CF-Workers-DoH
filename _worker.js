@@ -413,7 +413,7 @@ async function DOHRequest(request) {
     }
 
     // 根据请求方法和参数构建转发请求
-    let response;
+    let response = null;
 
     // 故障转移上游列表：CF → doh.pub（腾讯）→ 阿里
     const jsonUpstreams = [
@@ -449,6 +449,8 @@ async function DOHRequest(request) {
         } catch (e) { continue; }
       }
     } else if (method === 'POST') {
+      // ReadableStream 只能消费一次，先读成 ArrayBuffer 供多次重试使用
+      const bodyBuffer = await request.arrayBuffer();
       // 处理 POST 请求，依次尝试各上游
       for (const upstream of dnsUpstreams) {
         try {
@@ -459,7 +461,7 @@ async function DOHRequest(request) {
               'Content-Type': 'application/dns-message',
               'User-Agent': UA
             },
-            body: body
+            body: bodyBuffer
           });
           if (response.ok) break;
         } catch (e) { continue; }
@@ -476,6 +478,9 @@ async function DOHRequest(request) {
       });
     }
 
+    if (!response) {
+      throw new Error('所有上游 DoH 服务均不可用');
+    }
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`DoH 返回错误 (${response.status}): ${errorText.substring(0, 200)}`);

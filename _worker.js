@@ -415,41 +415,55 @@ async function DOHRequest(request) {
     // 根据请求方法和参数构建转发请求
     let response;
 
+    // 故障转移上游列表：CF → doh.pub（腾讯）→ 阿里
+    const jsonUpstreams = [
+      jsonDoH,
+      'https://doh.pub/resolve',
+      'https://dns.alidns.com/resolve',
+    ];
+    const dnsUpstreams = [
+      dnsDoH,
+      'https://doh.pub/dns-query',
+      'https://dns.alidns.com/dns-query',
+    ];
+
     if (method === 'GET' && searchParams.has('name')) {
       const searchDoH = searchParams.has('type') ? url.search : url.search + '&type=A';
-      // 处理 JSON 格式的 DoH 请求
-      response = await fetch(dnsDoH + searchDoH, {
-        headers: {
-          'Accept': 'application/dns-json',
-          'User-Agent': UA
-        }
-      });
-      // 如果 DoHUrl 请求非成功（状态码 200），则再请求 jsonDoH
-      if (!response.ok) response = await fetch(jsonDoH + searchDoH, {
-        headers: {
-          'Accept': 'application/dns-json',
-          'User-Agent': UA
-        }
-      });
+      // 处理 JSON 格式的 DoH 请求，依次尝试各上游
+      for (const upstream of jsonUpstreams) {
+        try {
+          response = await fetch(upstream + searchDoH, {
+            headers: { 'Accept': 'application/dns-json', 'User-Agent': UA }
+          });
+          if (response.ok) break;
+        } catch (e) { continue; }
+      }
     } else if (method === 'GET') {
-      // 处理 base64url 格式的 GET 请求
-      response = await fetch(dnsDoH + url.search, {
-        headers: {
-          'Accept': 'application/dns-message',
-          'User-Agent': UA
-        }
-      });
+      // 处理 base64url 格式的 GET 请求，依次尝试各上游
+      for (const upstream of dnsUpstreams) {
+        try {
+          response = await fetch(upstream + url.search, {
+            headers: { 'Accept': 'application/dns-message', 'User-Agent': UA }
+          });
+          if (response.ok) break;
+        } catch (e) { continue; }
+      }
     } else if (method === 'POST') {
-      // 处理 POST 请求
-      response = await fetch(dnsDoH, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/dns-message',
-          'Content-Type': 'application/dns-message',
-          'User-Agent': UA
-        },
-        body: body
-      });
+      // 处理 POST 请求，依次尝试各上游
+      for (const upstream of dnsUpstreams) {
+        try {
+          response = await fetch(upstream, {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/dns-message',
+              'Content-Type': 'application/dns-message',
+              'User-Agent': UA
+            },
+            body: body
+          });
+          if (response.ok) break;
+        } catch (e) { continue; }
+      }
 
     } else {
       // 其他不支持的请求方式

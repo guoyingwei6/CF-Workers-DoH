@@ -432,20 +432,22 @@ async function DOHRequest(request) {
       // 处理 JSON 格式的 DoH 请求，依次尝试各上游
       for (const upstream of jsonUpstreams) {
         try {
-          response = await fetch(upstream + searchDoH, {
+          const res = await fetch(upstream + searchDoH, {
             headers: { 'Accept': 'application/dns-json', 'User-Agent': UA }
           });
-          if (response.ok) break;
+          if (res.ok) { response = res; break; }
+          res.body?.cancel();
         } catch (e) { continue; }
       }
     } else if (method === 'GET') {
       // 处理 base64url 格式的 GET 请求，依次尝试各上游
       for (const upstream of dnsUpstreams) {
         try {
-          response = await fetch(upstream + url.search, {
+          const res = await fetch(upstream + url.search, {
             headers: { 'Accept': 'application/dns-message', 'User-Agent': UA }
           });
-          if (response.ok) break;
+          if (res.ok) { response = res; break; }
+          res.body?.cancel();
         } catch (e) { continue; }
       }
     } else if (method === 'POST') {
@@ -454,7 +456,7 @@ async function DOHRequest(request) {
       // 处理 POST 请求，依次尝试各上游
       for (const upstream of dnsUpstreams) {
         try {
-          response = await fetch(upstream, {
+          const res = await fetch(upstream, {
             method: 'POST',
             headers: {
               'Accept': 'application/dns-message',
@@ -463,7 +465,8 @@ async function DOHRequest(request) {
             },
             body: bodyBuffer
           });
-          if (response.ok) break;
+          if (res.ok) { response = res; break; }
+          res.body?.cancel();
         } catch (e) { continue; }
       }
 

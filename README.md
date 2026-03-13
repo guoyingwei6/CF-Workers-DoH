@@ -100,6 +100,33 @@ https://doh.cmliussss.hidns.co/ip-info?ip=8.8.8.8&token=CMLiussss
 ## ⭐ Star 星星走起
 [![Stargazers over time](https://starchart.cc/cmliu/CF-Workers-DoH.svg?variant=adaptive)](https://starchart.cc/cmliu/CF-Workers-DoH)
 
+## 🔄 上游故障转移机制
+
+本分支（`feat/failover-upstreams`）在原版基础上新增了三级上游故障转移，提升服务可用性。
+
+### 故障转移链路
+
+```
+第一优先：Cloudflare DNS（cloudflare-dns.com）
+    ↓ 失败/超时/非 200
+第二优先：doh.pub（腾讯 DNSPod）
+    ↓ 失败/超时/非 200
+第三优先：dns.alidns.com（阿里 DNS）
+    ↓ 三家全部失败
+返回 500，iOS 自动降级回运营商默认 DNS
+```
+
+> [!NOTE]
+> 三家同时不可用的概率极低。即使全部失败，iOS 会自动降级到运营商 DNS，不会断网，只是暂时失去 DoH 加密保护。
+
+### 修复的问题
+
+| 问题 | 说明 |
+|------|------|
+| POST body 只能读一次 | 原版在重试时会因 `ReadableStream` 已锁定而报错，修复为先读成 `ArrayBuffer` 再复用 |
+| 所有上游网络异常时崩溃 | 原版 `response` 未赋值导致 `TypeError`，修复为初始化 `null` 并补充检查 |
+| 中间失败响应的流泄漏 | 切换上游前主动 `cancel()` 上一个失败响应的 body stream |
+
 ## 💡 技术特性
 - 基于 Cloudflare Workers 无服务器架构
 - 使用原生 JavaScript 实现
